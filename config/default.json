@@ -1,0 +1,6 @@
+{
+  "environment": "dev",
+  "rootUrl": "http://localhost:8000",
+  "logPath": "logs",
+  "dbBasePath": "dbs"
+}
