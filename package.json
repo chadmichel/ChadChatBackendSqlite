@@ -18,6 +18,10 @@
     "awilix": "^8.0.1",
     "config": "^3.3.9",
     "fastify": "^4.19.2",
-    "sqlite3": "^5.1.6"
+    "sqlite3": "^5.1.6",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.2"
   }
 }

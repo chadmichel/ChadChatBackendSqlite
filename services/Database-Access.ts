@@ -2,28 +2,37 @@ import fastify from 'fastify';
 import { ConfigUtil } from './Config-Util';
 import { Database } from 'sqlite3';
 import { Context } from './context';
+import { Logger } from './logger';
 
 export class DatabaseAccess {
   async initSystem() {
     await this.createTables();
   }
-  constructor(private config: ConfigUtil, private context: Context) {}
+  constructor(
+    private logger: Logger,
+    private config: ConfigUtil,
+    private context: Context
+  ) {}
   public testMe() {
     return 'DatabaseAccess';
   }
   dispose() {}
 
+  dbPath() {
+    return this.config.dbBasePath + '/' + this.context.tenantId + '.db';
+  }
+
   async runScript(script: string) {
     var promise = new Promise((resolve, reject) => {
-      console.log('runScript; script: ' + script);
-      const db = new Database(this.config.dbBasePath);
+      this.logger.debug('runScript: script: ' + script);
+      const db = new Database(this.dbPath());
 
       db.run(script, (err) => {
         if (err) {
-          console.log(err);
+          this.logger.error(err.toString());
           reject(err);
         } else {
-          console.log('script run successfully');
+          this.logger.debug('script run successfully');
           resolve(null);
         }
       });
@@ -32,7 +41,9 @@ export class DatabaseAccess {
   }
 
   async createTables() {
-    console.log('userid = ' + this.context.userId);
+    this.logger.debug('create tables: userid = ' + this.context.userId);
+    this.logger.debug('create tables: path = ' + this.config.dbBasePath);
+
     await this.runScript(
       'create table if not exists users (id text primary key, name text not null, email text not null, password text not null, role text not null, created_at text not null, updated_at text not null);'
     );

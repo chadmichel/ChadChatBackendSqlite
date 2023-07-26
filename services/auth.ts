@@ -1,8 +1,10 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { Context } from './context';
+import { Logger } from './logger';
 
 export class Auth {
   constructor(
+    private logger: Logger,
     private context: Context,
     private request: FastifyRequest,
     private reply: FastifyReply
@@ -10,11 +12,7 @@ export class Auth {
   dispose() {}
 
   public async createToken() {
-    // request.log.info('createToken');
-
-    // request.log.debug('createToken request: ' + request.body);
-    const context = this.request.diScope.resolve<Context>('context');
-    const userId = context.userId;
+    const userId = this.context.userId;
 
     const body = this.request.body as any;
     const email = body.email;
@@ -29,7 +27,7 @@ export class Auth {
       expriesOn: expiresOn,
     });
 
-    // request.log.info('createToken response: ' + token);
+    this.logger.info(`createToken: ${token} for user ${userId} ${email}`);
     return token;
   }
 }

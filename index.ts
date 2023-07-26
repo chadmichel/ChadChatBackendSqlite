@@ -16,53 +16,74 @@ import { Services } from './services/Services';
 import { ConfigUtil } from './services/Config-Util';
 import { Context } from './services/context';
 import { Auth } from './services/auth';
+import { v4 as uuidv4 } from 'uuid';
+import { AdminManager } from './services/admin-manager';
+import { Logger } from './services/logger';
 
 const server = fastify();
 
 const currentApiVersion = '/v1';
 
-// plugin configuration
-server.register(fastifyAwilixPlugin, {
-  disposeOnClose: true,
-  disposeOnResponse: true,
-});
-
-// register services
-const container = createContainer<Services>({
-  injectionMode: InjectionMode.CLASSIC,
-});
-container.register({
-  context: asFunction(() => {
-    return new Context();
-  }).scoped(),
-  config: asClass(ConfigUtil),
-  databaseAccess: asClass(DatabaseAccess),
-});
-
 server.register(require('@fastify/jwt'), {
   secret: 'SECRET',
 });
 
-server.addHook('onRequest', async (request, reply, done) => {
-  // //request.diScope.createScope();
-  // request.diScope.register({
-  //   context: asFunction(() => {
-  //     return new Context();
-  //   }).scoped(),
-  //   config: asClass(ConfigUtil),
-  //   databaseAccess: asClass(DatabaseAccess),
-  //   auth: asClass(Auth),
-  //   request: asFunction(() => {
-  //     request;
-  //   }),
-  //   reply: asFunction(() => {
-  //     reply;
-  //   }),
-  // });
-  // var context = request.diScope.resolve<Context>('context');
-  // context.userId = 'blah';
-  // //done();
-});
+function buildContext(
+  requestHandler: string,
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as any;
+  let context = {
+    userId: '',
+    userEmail: '',
+    role: 'anonymous',
+    requestId: uuidv4(),
+    requestHandler: requestHandler,
+    token: '',
+    tenantId: 'default',
+  } as Context;
+
+  if (user) {
+    context = {
+      userId: '',
+      userEmail: user.email,
+      role: user.role,
+      token: request.headers.token,
+      requestId: uuidv4(),
+      requestHandler: requestHandler,
+      tenantId: 'default',
+    } as Context;
+  }
+  return context;
+}
+
+function buildServices(
+  requestHandler: string,
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const logger = new Logger(request);
+
+  const context = buildContext(requestHandler, request, reply);
+
+  const configUtil = new ConfigUtil();
+  const auth = new Auth(logger, context, request, reply);
+
+  const databaseAccess = new DatabaseAccess(logger, configUtil, context);
+
+  const adminManager = new AdminManager(logger, context, databaseAccess);
+
+  const services = {
+    logger: logger,
+    config: configUtil,
+    context: context,
+    auth: auth,
+    databaseAccess: databaseAccess,
+    adminManager: adminManager,
+  } as Services;
+  return services;
+}
 
 const authenticate = async function (request: any, reply: any) {
   try {
@@ -83,6 +104,22 @@ const authenticateAdmin = async function (request: any, reply: any) {
   }
 };
 
+const adminPost = function (
+  route: string,
+  handler: (services: Services) => Promise<any>
+) {
+  server.post(
+    currentApiVersion + route,
+    {
+      onRequest: [authenticateAdmin],
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const services = buildServices(route, request, reply);
+      return await handler(services);
+    }
+  );
+};
+
 server.setErrorHandler((error, request, reply) => {
   request.log.error(error);
   console.log(error);
@@ -99,16 +136,16 @@ server.post(
     onRequest: [authenticateAdmin],
   },
   async (request: FastifyRequest, reply: FastifyReply) => {
-    return await initSystem(request, reply, container);
+    const services = buildServices('/admin/initSystem', request, reply);
+    return await services.adminManager.initSystem();
   }
 );
 
 server.post(
   currentApiVersion + '/auth/token',
   async (request: FastifyRequest, reply: FastifyReply) => {
-    const auth = request.diScope.resolve<Auth>('auth');
-    return auth.createToken();
-    //return createToken(request, reply);
+    const services = buildServices('/auth/token', request, reply);
+    return services.auth.createToken();
   }
 );
 
