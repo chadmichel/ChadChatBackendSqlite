@@ -90,6 +90,27 @@ export class DatabaseAccess {
     return promise;
   }
 
+  async chatDetail(chatId: string): Promise<ChatDetail> {
+    var sql = 'select * from chats where id = ?';
+    var params = [chatId];
+    var promise = new Promise<ChatDetail>((resolve, reject) => {
+      this.logger.debug('chatDetail: sql: ' + sql);
+      const db = new Database(this.dbPath());
+
+      db.get(sql, params, (err, row) => {
+        if (err) {
+          this.logger.error(err.toString());
+          reject(err);
+        } else {
+          this.logger.debug('chatDetail: row: ' + JSON.stringify(row));
+          const rowCasted = this.mapToTS<ChatDetail>(row);
+          resolve(rowCasted);
+        }
+      });
+    });
+    return promise;
+  }
+
   async upsertChat(chat: ChatDetail, id?: string): Promise<string> {
     var guid = await this.upsert('chats', chat, id);
     return guid;
@@ -178,63 +199,6 @@ export class DatabaseAccess {
     return promise;
   }
 
-  async insert<T>(tableName: string, insertObj: T): Promise<string> {
-    const guid = uuidv4();
-
-    const obj = this.mapToDb<T>(insertObj);
-    var sql = 'insert into ' + tableName + ' (';
-    var values = ' values (';
-    var params = [] as any[];
-
-    const columns = Object.keys(obj);
-
-    sql += 'id,';
-    params.push(guid);
-
-    const formattedColumns = columns.map((column) => {
-      sql += column + ',';
-      values += '?,';
-      params.push(obj[column]);
-    });
-    sql = sql.substring(0, sql.length - 1);
-    values = values.substring(0, values.length - 1);
-    sql += ')';
-    values += ')';
-    sql += values;
-    var promise = new Promise<string>((resolve, reject) => {
-      this.logger.debug('insert: sql: ' + sql);
-      const db = new Database(this.dbPath());
-
-      db.run(sql, params, (err) => {
-        if (err) {
-          this.logger.error(err.toString());
-          reject(err);
-        } else {
-          this.logger.debug('insert: success');
-          resolve(guid);
-        }
-      });
-    });
-    return promise;
-  }
-
-  async insertSQL(sql: string, params: []): Promise<number> {
-    var promise = new Promise<number>((resolve, reject) => {
-      this.logger.debug('insertSQL: sql: ' + sql);
-      const db = new Database(this.dbPath());
-
-      db.run(sql, params, (err) => {
-        if (err) {
-          this.logger.error(err.toString());
-          reject(err);
-        } else {
-          this.logger.debug('insertSQL: success');
-        }
-      });
-    });
-    return promise;
-  }
-
   async selectSQL<T>(sql: string, params: []): Promise<ListItem<T>[]> {
     var promise = new Promise<ListItem<T>[]>((resolve, reject) => {
       this.logger.debug('selectSQL: sql: ' + sql);
@@ -295,7 +259,10 @@ export class DatabaseAccess {
         (word) => word.charAt(0).toUpperCase() + word.slice(1)
       );
       const tsProp = capitalizedWords.join('');
-      obj[tsProp] = row[column];
+      var lowerProp = tsProp.charAt(0).toLowerCase() + tsProp.slice(1);
+      if (tsProp != 'Id' && tsProp != 'CreatedAt' && tsProp != 'UpdatedAt') {
+        obj[lowerProp] = row[column];
+      }
     });
     return obj as T;
   }

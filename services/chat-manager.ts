@@ -13,6 +13,10 @@ import {
   createSuccessApiInsertReponse,
 } from '../dto/api-insert-response';
 import { User } from '../dto/user';
+import {
+  ApiItemResponse,
+  createSuccessApiItemReponse,
+} from '../dto/api-item-response';
 
 export class ChatManager {
   constructor(
@@ -40,6 +44,14 @@ export class ChatManager {
       chats,
       this.context
     );
+    return response;
+  }
+
+  public async getChat(): Promise<ApiItemResponse> {
+    const id = this.context.params.id;
+    var chat = await this.databaseAccess.chatDetail(id);
+
+    const response = createSuccessApiItemReponse(chat, id, this.context);
     return response;
   }
 

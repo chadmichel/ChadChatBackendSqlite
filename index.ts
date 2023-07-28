@@ -226,6 +226,9 @@ server.post(
 authenticatedGet('/chats', async (services) => {
   return await services.chatManager.getChats();
 });
+authenticatedGet('/chats/:id', async (services) => {
+  return await services.chatManager.getChat();
+});
 authenticatedPost('/chats', async (services) => {
   return await services.chatManager.insertChat();
 });
