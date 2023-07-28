@@ -5,6 +5,7 @@ import { Context } from './context';
 import { Auth } from './auth';
 import { AdminManager } from './admin-manager';
 import { Logger } from './logger';
+import { ChatManager } from './chat-manager';
 
 export interface Services {
   logger: Logger;
@@ -15,4 +16,5 @@ export interface Services {
   databaseAccess: DatabaseAccess;
 
   adminManager: AdminManager;
+  chatManager: ChatManager;
 }

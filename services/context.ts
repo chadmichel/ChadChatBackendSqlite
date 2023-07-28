@@ -5,6 +5,10 @@ export interface Context {
   requestId: string;
   requestHandler: string | null;
   tenantId: string;
+  requestUrl: string;
+  fullUrl: string;
+
+  body: any;
 }
 
 export interface Header {

@@ -19,10 +19,11 @@ import { Auth } from './services/auth';
 import { v4 as uuidv4 } from 'uuid';
 import { AdminManager } from './services/admin-manager';
 import { Logger } from './services/logger';
+import { ChatManager } from './services/chat-manager';
 
 const server = fastify();
 
-const currentApiVersion = '/v1';
+const currentApiVersion = '/v1/:tenantId';
 
 server.register(require('@fastify/jwt'), {
   secret: 'SECRET',
@@ -41,7 +42,10 @@ function buildContext(
     requestId: uuidv4(),
     requestHandler: requestHandler,
     token: '',
-    tenantId: 'default',
+    tenantId: (request.params as any).tenantId,
+    requestUrl: request.url,
+    fullUrl: request.hostname + request.url,
+    body: request.body,
   } as Context;
 
   if (user) {
@@ -52,7 +56,10 @@ function buildContext(
       token: request.headers.token,
       requestId: uuidv4(),
       requestHandler: requestHandler,
-      tenantId: 'default',
+      tenantId: (request.params as any).tenantId,
+      requestUrl: request.url,
+      fullUrl: request.hostname + request.url,
+      body: request.body,
     } as Context;
   }
   return context;
@@ -73,6 +80,7 @@ function buildServices(
   const databaseAccess = new DatabaseAccess(logger, configUtil, context);
 
   const adminManager = new AdminManager(logger, context, databaseAccess);
+  const chatManager = new ChatManager(logger, context, databaseAccess);
 
   const services = {
     logger: logger,
@@ -81,6 +89,7 @@ function buildServices(
     auth: auth,
     databaseAccess: databaseAccess,
     adminManager: adminManager,
+    chatManager: chatManager,
   } as Services;
   return services;
 }
@@ -102,6 +111,72 @@ const authenticateAdmin = async function (request: any, reply: any) {
   } catch (err) {
     reply.send(err);
   }
+};
+
+const publicGet = function (
+  route: string,
+  handler: (services: Services) => Promise<any>
+) {
+  server.get(currentApiVersion + route, async (request, reply) => {
+    const services = buildServices(route, request, reply);
+    return await handler(services);
+  });
+};
+
+const authenticatedGet = function (
+  route: string,
+  handler: (services: Services) => Promise<any>
+) {
+  server.get(
+    currentApiVersion + route,
+    {
+      onRequest: [authenticate],
+    },
+    async (request, reply) => {
+      const start = new Date();
+      const services = buildServices(route, request, reply);
+      services.logger.debug('authenticatedGet: ' + route);
+      const response = await handler(services);
+      const end = new Date();
+      services.logger.debug(
+        'authenticatedGet: ' +
+          route +
+          ' response: ' +
+          response +
+          ' duration: ' +
+          (end.getTime() - start.getTime() + 'ms')
+      );
+      return response;
+    }
+  );
+};
+
+const authenticatedPost = function (
+  route: string,
+  handler: (services: Services) => Promise<any>
+) {
+  server.post(
+    currentApiVersion + route,
+    {
+      onRequest: [authenticate],
+    },
+    async (request, reply) => {
+      const start = new Date();
+      const services = buildServices(route, request, reply);
+      services.logger.debug('authenticatedPost: ' + route);
+      const response = await handler(services);
+      const end = new Date();
+      services.logger.debug(
+        'authenticatedPost: ' +
+          route +
+          ' response: ' +
+          response +
+          ' duration: ' +
+          (end.getTime() - start.getTime() + 'ms')
+      );
+      return response;
+    }
+  );
 };
 
 const adminPost = function (
@@ -126,21 +201,12 @@ server.setErrorHandler((error, request, reply) => {
   reply.send(error);
 });
 
-server.get('/build', async (request, reply) => {
+// PUBLIC ROUTES
+publicGet('/build', async (services) => {
   return '2023-07-13';
 });
 
-server.post(
-  currentApiVersion + '/admin/initsystem',
-  {
-    onRequest: [authenticateAdmin],
-  },
-  async (request: FastifyRequest, reply: FastifyReply) => {
-    const services = buildServices('/admin/initSystem', request, reply);
-    return await services.adminManager.initSystem();
-  }
-);
-
+// AUTH ROUTES
 server.post(
   currentApiVersion + '/auth/token',
   async (request: FastifyRequest, reply: FastifyReply) => {
@@ -148,6 +214,19 @@ server.post(
     return services.auth.createToken();
   }
 );
+
+// CHAT ROUTES
+authenticatedGet('/chats', async (services) => {
+  return await services.chatManager.getChats();
+});
+authenticatedPost('/chats', async (services) => {
+  return await services.chatManager.insertChat();
+});
+
+// ADMIN ROUTES
+adminPost('/admin/initsystem', async (services) => {
+  return await services.adminManager.initSystem();
+});
 
 // server.post(
 //   currentApiVersion + '/init',
