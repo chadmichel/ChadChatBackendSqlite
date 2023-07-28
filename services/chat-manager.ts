@@ -12,6 +12,7 @@ import {
   ApiInsertResponse,
   createSuccessApiInsertReponse,
 } from '../dto/api-insert-response';
+import { User } from '../dto/user';
 
 export class ChatManager {
   constructor(
@@ -21,6 +22,16 @@ export class ChatManager {
   ) {}
 
   dispose() {}
+
+  public async createUser(): Promise<ApiInsertResponse> {
+    const user = this.context.body as User;
+    const id = this.context.params.id;
+
+    const userId = await this.databaseAccess.upsertUser(user, id);
+
+    const response = createSuccessApiInsertReponse(userId, this.context);
+    return response;
+  }
 
   public async getChats(): Promise<ApiArrayResponse<ChatListItem>> {
     var chats = await this.databaseAccess.chatsForUser(this.context.userId);
@@ -35,7 +46,9 @@ export class ChatManager {
   public async insertChat(): Promise<ApiInsertResponse> {
     const chat = this.context.body as ChatDetail;
 
-    const chatId = await this.databaseAccess.insertChat(chat);
+    const chatId = await this.databaseAccess.upsertChat(chat);
+
+    await this.databaseAccess.upsertChatUser(chatId, this.context.userId, 0);
 
     const response = createSuccessApiInsertReponse(chatId, this.context);
     return response;

@@ -9,6 +9,7 @@ export interface Context {
   fullUrl: string;
 
   body: any;
+  params: any;
 }
 
 export interface Header {

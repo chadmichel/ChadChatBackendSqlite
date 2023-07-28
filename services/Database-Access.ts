@@ -7,6 +7,7 @@ import { ChatListItem } from '../dto/chat-list-item';
 import { v4 as uuidv4 } from 'uuid';
 import { ChatDetail } from '../dto/chat-detail';
 import { ListItem } from '../dto/list-item';
+import { User } from '../dto/user';
 
 export class DatabaseAccess {
   async initSystem() {
@@ -62,6 +63,11 @@ export class DatabaseAccess {
     );
   }
 
+  async upsertUser(user: User, id?: string): Promise<string> {
+    var guid = await this.upsert('users', user, id);
+    return guid;
+  }
+
   async chatsForUser(userId: string): Promise<ListItem<ChatListItem>[]> {
     var sql =
       'select chats.*, cu.unread_message_count from chats inner join chat_users cu on chats.id = cu.chat_id where cu.user_id = ?';
@@ -84,33 +90,33 @@ export class DatabaseAccess {
     return promise;
   }
 
-  async insertChat(chat: ChatDetail): Promise<string> {
-    var guid = await this.upsert<ChatDetail>('chats', chat);
+  async upsertChat(chat: ChatDetail, id?: string): Promise<string> {
+    var guid = await this.upsert('chats', chat, id);
     return guid;
   }
 
-  async insertChatUser(
+  async upsertChatUser(
     chatId: string,
     userId: string,
     unreadMessageCount: number
   ): Promise<string> {
     const chatUser = {
-      chat_id: chatId,
-      user_id: userId,
-      unread_message_count: unreadMessageCount,
+      chatId: chatId,
+      userId: userId,
+      unreadMessageCount: unreadMessageCount,
     };
     return this.upsert('chat_users', chatUser);
   }
 
-  async upsert<T>(
+  async upsert(
     tableName: string,
-    insertObj: T,
+    insertObj: any,
     guid?: string
   ): Promise<string> {
     if (!guid) {
       guid = uuidv4();
     }
-    const obj = this.mapToDb<T>(insertObj);
+    const obj = this.mapToDb(insertObj);
 
     if (!obj.created_at) {
       obj.created_at = new Date().toISOString();

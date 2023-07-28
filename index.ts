@@ -46,11 +46,12 @@ function buildContext(
     requestUrl: request.url,
     fullUrl: request.hostname + request.url,
     body: request.body,
+    params: request.params,
   } as Context;
 
   if (user) {
     context = {
-      userId: '',
+      userId: user.id,
       userEmail: user.email,
       role: user.role,
       token: request.headers.token,
@@ -60,6 +61,7 @@ function buildContext(
       requestUrl: request.url,
       fullUrl: request.hostname + request.url,
       body: request.body,
+      params: request.params,
     } as Context;
   }
   return context;
@@ -204,6 +206,11 @@ server.setErrorHandler((error, request, reply) => {
 // PUBLIC ROUTES
 publicGet('/build', async (services) => {
   return '2023-07-13';
+});
+
+// INIT USER
+authenticatedPost('/users', async (services) => {
+  return await services.chatManager.createUser();
 });
 
 // AUTH ROUTES
