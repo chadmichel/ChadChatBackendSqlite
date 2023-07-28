@@ -51,6 +51,14 @@ export class ChatManager {
     const id = this.context.params.id;
     var chat = await this.databaseAccess.chatDetail(id);
 
+    var chatUsers = await this.databaseAccess.chatUsers(id);
+    chat.chatUsers = chatUsers.map((x) => {
+      return {
+        name: x.data.name,
+        email: x.data.email,
+      };
+    });
+
     const response = createSuccessApiItemReponse(chat, id, this.context);
     return response;
   }

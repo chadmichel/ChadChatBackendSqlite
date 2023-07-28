@@ -111,6 +111,28 @@ export class DatabaseAccess {
     return promise;
   }
 
+  async chatUsers(chatId: string): Promise<ListItem<User>[]> {
+    var sql =
+      'select u.* from users u inner join chat_users cu on u.id = cu.user_id where cu.chat_id = ?';
+    var params = [chatId];
+    var promise = new Promise<ListItem<User>[]>((resolve, reject) => {
+      this.logger.debug('chatUsers: sql: ' + sql);
+      const db = new Database(this.dbPath());
+
+      db.all(sql, params, (err, rows) => {
+        if (err) {
+          this.logger.error(err.toString());
+          reject(err);
+        } else {
+          this.logger.debug('chatUsers: rows: ' + JSON.stringify(rows));
+          const rowsCasted = this.mapToTSArray<User>(rows);
+          resolve(rowsCasted);
+        }
+      });
+    });
+    return promise;
+  }
+
   async upsertChat(chat: ChatDetail, id?: string): Promise<string> {
     var guid = await this.upsert('chats', chat, id);
     return guid;
