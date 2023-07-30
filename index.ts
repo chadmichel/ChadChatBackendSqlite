@@ -20,10 +20,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { AdminManager } from './services/admin-manager';
 import { Logger } from './services/logger';
 import { ChatManager } from './services/chat-manager';
+import { SqliteUtil } from './services/sqlite-util';
 
 const server = fastify();
 
-const currentApiVersion = '/v1/:tenantId';
+const currentApiVersion = '/api/chat/v1';
 
 server.register(require('@fastify/jwt'), {
   secret: 'SECRET',
@@ -35,6 +36,7 @@ function buildContext(
   reply: FastifyReply
 ) {
   const user = request.user as any;
+  const tenantId = (request.headers as any).tenantId ?? 'default';
   let context = {
     userId: '',
     userEmail: '',
@@ -42,7 +44,7 @@ function buildContext(
     requestId: uuidv4(),
     requestHandler: requestHandler,
     token: '',
-    tenantId: (request.params as any).tenantId,
+    tenantId: tenantId,
     requestUrl: request.url,
     fullUrl: request.hostname + request.url,
     body: request.body,
@@ -57,7 +59,7 @@ function buildContext(
       token: request.headers.token,
       requestId: uuidv4(),
       requestHandler: requestHandler,
-      tenantId: (request.params as any).tenantId,
+      tenantId: tenantId,
       requestUrl: request.url,
       fullUrl: request.hostname + request.url,
       body: request.body,
@@ -79,7 +81,14 @@ function buildServices(
   const configUtil = new ConfigUtil();
   const auth = new Auth(logger, context, request, reply);
 
-  const databaseAccess = new DatabaseAccess(logger, configUtil, context);
+  const sqlite = new SqliteUtil(logger, configUtil, context);
+
+  const databaseAccess = new DatabaseAccess(
+    logger,
+    configUtil,
+    context,
+    sqlite
+  );
 
   const adminManager = new AdminManager(logger, context, databaseAccess);
   const chatManager = new ChatManager(logger, context, databaseAccess);
@@ -181,6 +190,62 @@ const authenticatedPost = function (
   );
 };
 
+const authenticatedPut = function (
+  route: string,
+  handler: (services: Services) => Promise<any>
+) {
+  server.put(
+    currentApiVersion + route,
+    {
+      onRequest: [authenticate],
+    },
+    async (request, reply) => {
+      const start = new Date();
+      const services = buildServices(route, request, reply);
+      services.logger.debug('authenticatedPut: ' + route);
+      const response = await handler(services);
+      const end = new Date();
+      services.logger.debug(
+        'authenticatedPut: ' +
+          route +
+          ' response: ' +
+          response +
+          ' duration: ' +
+          (end.getTime() - start.getTime() + 'ms')
+      );
+      return response;
+    }
+  );
+};
+
+const authenticatedDelete = function (
+  route: string,
+  handler: (services: Services) => Promise<any>
+) {
+  server.delete(
+    currentApiVersion + route,
+    {
+      onRequest: [authenticate],
+    },
+    async (request, reply) => {
+      const start = new Date();
+      const services = buildServices(route, request, reply);
+      services.logger.debug('authenticatedDelete: ' + route);
+      const response = await handler(services);
+      const end = new Date();
+      services.logger.debug(
+        'authenticatedDelete: ' +
+          route +
+          ' response: ' +
+          response +
+          ' duration: ' +
+          (end.getTime() - start.getTime() + 'ms')
+      );
+      return response;
+    }
+  );
+};
+
 const adminPost = function (
   route: string,
   handler: (services: Services) => Promise<any>
@@ -231,6 +296,21 @@ authenticatedGet('/chats/:id', async (services) => {
 });
 authenticatedPost('/chats', async (services) => {
   return await services.chatManager.insertChat();
+});
+authenticatedPut('/chats/:id', async (services) => {
+  return await services.chatManager.updateChat();
+});
+authenticatedGet('/chats/:id/users', async (services) => {
+  return await services.chatManager.chatUsers();
+});
+authenticatedPost('/chats/:id/users', async (services) => {
+  return await services.chatManager.insertChatUser();
+});
+authenticatedPut('/chats/:id/users/:userId', async (services) => {
+  return await services.chatManager.updateChatUser();
+});
+authenticatedDelete('/chats/:id/users/:userId', async (services) => {
+  return await services.chatManager.deleteChatUser();
 });
 
 // ADMIN ROUTES

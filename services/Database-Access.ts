@@ -8,6 +8,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { ChatDetail } from '../dto/chat-detail';
 import { ListItem } from '../dto/list-item';
 import { User } from '../dto/user';
+import { SqliteUtil } from './sqlite-util';
+import { ChatUser } from '../dto/chat-user';
 
 export class DatabaseAccess {
   async initSystem() {
@@ -16,55 +18,36 @@ export class DatabaseAccess {
   constructor(
     private logger: Logger,
     private config: ConfigUtil,
-    private context: Context
+    private context: Context,
+    private sql: SqliteUtil
   ) {}
-  public testMe() {
-    return 'DatabaseAccess';
-  }
+
   dispose() {}
 
   dbPath() {
     return this.config.dbBasePath + '/' + this.context.tenantId + '.db';
   }
 
-  async runScript(script: string) {
-    var promise = new Promise((resolve, reject) => {
-      this.logger.debug('runScript: script: ' + script);
-      const db = new Database(this.dbPath());
-
-      db.run(script, (err) => {
-        if (err) {
-          this.logger.error(err.toString());
-          reject(err);
-        } else {
-          this.logger.debug('script run successfully');
-          resolve(null);
-        }
-      });
-    });
-    return promise;
-  }
-
   async createTables() {
     this.logger.debug('create tables: userid = ' + this.context.userId);
     this.logger.debug('create tables: path = ' + this.config.dbBasePath);
 
-    await this.runScript(
+    await this.sql.runScript(
       'create table if not exists users (id text primary key, name text not null, email text not null, password text not null, role text not null, created_at text not null, updated_at text not null);'
     );
-    await this.runScript(
+    await this.sql.runScript(
       'create table if not exists chats (id text primary key, name text not null, created_at text not null, updated_at text not null, last_message text, last_message_at, last_message_by, last_message_by_id, last_message_by_avatar);'
     );
-    await this.runScript(
+    await this.sql.runScript(
       'create table if not exists messages (id text primary key, chat_id text not null, user_id text not null, message text not null, created_at text not null, updated_at text not null);'
     );
-    await this.runScript(
+    await this.sql.runScript(
       'create table if not exists chat_users (id text primary key, chat_id text not null, user_id text not null, created_at text not null, updated_at text not null, unread_message_count not null);'
     );
   }
 
   async upsertUser(user: User, id?: string): Promise<string> {
-    var guid = await this.upsert('users', user, id);
+    var guid = await this.sql.upsert('users', user, id);
     return guid;
   }
 
@@ -82,7 +65,7 @@ export class DatabaseAccess {
           reject(err);
         } else {
           this.logger.debug('chatsForUser: rows: ' + JSON.stringify(rows));
-          const rowsCasted = this.mapToTSArray<ChatListItem>(rows);
+          const rowsCasted = this.sql.mapToTSArray<ChatListItem>(rows);
           resolve(rowsCasted);
         }
       });
@@ -103,7 +86,7 @@ export class DatabaseAccess {
           reject(err);
         } else {
           this.logger.debug('chatDetail: row: ' + JSON.stringify(row));
-          const rowCasted = this.mapToTS<ChatDetail>(row);
+          const rowCasted = this.sql.mapToTS<ChatDetail>(row);
           resolve(rowCasted);
         }
       });
@@ -111,11 +94,11 @@ export class DatabaseAccess {
     return promise;
   }
 
-  async chatUsers(chatId: string): Promise<ListItem<User>[]> {
+  async chatUsers(chatId: string): Promise<ListItem<ChatUser>[]> {
     var sql =
-      'select u.* from users u inner join chat_users cu on u.id = cu.user_id where cu.chat_id = ?';
+      'select u.id, u.email, cu.unread_message_count from users u inner join chat_users cu on u.id = cu.user_id where cu.chat_id = ?';
     var params = [chatId];
-    var promise = new Promise<ListItem<User>[]>((resolve, reject) => {
+    var promise = new Promise<ListItem<ChatUser>[]>((resolve, reject) => {
       this.logger.debug('chatUsers: sql: ' + sql);
       const db = new Database(this.dbPath());
 
@@ -125,7 +108,7 @@ export class DatabaseAccess {
           reject(err);
         } else {
           this.logger.debug('chatUsers: rows: ' + JSON.stringify(rows));
-          const rowsCasted = this.mapToTSArray<User>(rows);
+          const rowsCasted = this.sql.mapToTSArray<ChatUser>(rows);
           resolve(rowsCasted);
         }
       });
@@ -134,7 +117,7 @@ export class DatabaseAccess {
   }
 
   async upsertChat(chat: ChatDetail, id?: string): Promise<string> {
-    var guid = await this.upsert('chats', chat, id);
+    var guid = await this.sql.upsert('chats', chat, id);
     return guid;
   }
 
@@ -148,172 +131,27 @@ export class DatabaseAccess {
       userId: userId,
       unreadMessageCount: unreadMessageCount,
     };
-    return this.upsert('chat_users', chatUser);
-  }
 
-  async upsert(
-    tableName: string,
-    insertObj: any,
-    guid?: string
-  ): Promise<string> {
-    if (!guid) {
-      guid = uuidv4();
+    const sql = 'select * from chat_users where chat_id = ? and user_id = ?';
+    const params = [] as any[];
+    params.push(chatId);
+    params.push(userId);
+
+    const user = await this.sql.selectSQL<ChatUser>(sql, params as []);
+    if (!user || user.length == 0) {
+      return this.sql.upsert('chat_users', chatUser);
     }
-    const obj = this.mapToDb(insertObj);
-
-    if (!obj.created_at) {
-      obj.created_at = new Date().toISOString();
-    }
-    obj.updated_at = new Date().toISOString();
-
-    var sql = 'insert into ' + tableName + ' (';
-    var values = ' values (';
-    var params = [] as any[];
-
-    const columns = Object.keys(obj);
-
-    sql += 'id,';
-    params.push(guid);
-    values += '?,';
-
-    const formattedColumns = columns.map((column) => {
-      sql += column + ',';
-      values += '?,';
-      params.push(obj[column]);
-    });
-
-    sql = sql.substring(0, sql.length - 1);
-    values = values.substring(0, values.length - 1);
-    sql += ')';
-    values += ')';
-    sql += values;
-    sql += ' on conflict(id) do update set ';
-    const formattedColumns2 = columns.map((column) => {
-      sql += column + ' = ?,';
-      params.push(obj[column]);
-    });
-    sql = sql.substring(0, sql.length - 1);
-    sql += ' where id = ?';
-    params.push(guid);
-
-    var promise = new Promise<string>((resolve, reject) => {
-      this.logger.debug('upsert: sql: ' + sql);
-      this.logger.debug('upsert: params: ' + JSON.stringify(params));
-
-      const db = new Database(this.dbPath());
-
-      let debugSql = sql;
-      params.forEach((param) => {
-        debugSql = debugSql.replace('?', "'" + param + "'");
-      });
-      this.logger.debug('upsert: debugSql: ' + debugSql);
-
-      db.run(sql, params, (err) => {
-        if (err) {
-          this.logger.error(err.toString());
-          reject(err);
-        } else {
-          this.logger.debug('upsert: success');
-          resolve(guid as string);
-        }
-      });
-    });
-    return promise;
+    return '';
   }
 
-  async selectSQL<T>(sql: string, params: []): Promise<ListItem<T>[]> {
-    var promise = new Promise<ListItem<T>[]>((resolve, reject) => {
-      this.logger.debug('selectSQL: sql: ' + sql);
-      const db = new Database(this.dbPath());
+  async deleteChatUser(chatId: string, userId: string): Promise<string> {
+    const sql = 'delete from chat_users where chat_id = ? and user_id = ?';
+    const params = [] as any[];
+    params.push(chatId);
+    params.push(userId);
 
-      db.all(sql, params, (err, rows) => {
-        if (err) {
-          this.logger.error(err.toString());
-          reject(err);
-        } else {
-          this.logger.debug('selectSQL: rows: ' + JSON.stringify(rows));
-          const rowsCasted = this.mapToTSArray<T>(rows);
-          resolve(rowsCasted);
-        }
-      });
-    });
-    return promise;
-  }
+    await this.sql.runScript(sql, params as []);
 
-  async selectAll<T>(tableName: string): Promise<ListItem<T>[]> {
-    var sql = 'select * from ' + tableName;
-    var promise = new Promise<ListItem<T>[]>((resolve, reject) => {
-      this.logger.debug('selectAll: sql: ' + sql);
-      const db = new Database(this.dbPath());
-
-      db.all(sql, (err, rows) => {
-        if (err) {
-          this.logger.error(err.toString());
-          reject(err);
-        } else {
-          this.logger.debug('selectAll: rows: ' + JSON.stringify(rows));
-          const rowsCasted = this.mapToTSArray<T>(rows);
-          resolve(rowsCasted);
-        }
-      });
-    });
-    return promise;
-  }
-
-  mapToTSArray<T>(rows: any): ListItem<T>[] {
-    var arr = [] as ListItem<T>[];
-    rows.forEach((row: any) => {
-      var listItem = {
-        id: row.id,
-        data: this.mapToTS<T>(row),
-      } as ListItem<T>;
-      arr.push(listItem);
-    });
-    return arr;
-  }
-
-  mapToTS<T>(row: any): T {
-    let obj = {} as any;
-    const columns = Object.keys(row);
-    const formattedColumns = columns.map((column) => {
-      const words = column.split('_');
-      const capitalizedWords = words.map(
-        (word) => word.charAt(0).toUpperCase() + word.slice(1)
-      );
-      const tsProp = capitalizedWords.join('');
-      var lowerProp = tsProp.charAt(0).toLowerCase() + tsProp.slice(1);
-      if (tsProp != 'Id' && tsProp != 'CreatedAt' && tsProp != 'UpdatedAt') {
-        obj[lowerProp] = row[column];
-      }
-    });
-    return obj as T;
-  }
-
-  mapToDbArray<T>(arr: any): any {
-    var rows = [] as T[];
-    arr.forEach((obj: any) => {
-      rows.push(this.mapToDb<T>(obj));
-    });
-    return rows;
-  }
-
-  mapToDb<T>(obj: any): any {
-    let row = {} as any;
-
-    const newObj = Object.keys(obj)
-      .filter((key) => !Array.isArray(obj[key]))
-      .reduce((acc, key) => {
-        (acc as any)[key] = obj[key];
-        return acc;
-      }, {}) as any;
-
-    const columns = Object.keys(newObj);
-    const formattedColumns = columns.map((column) => {
-      const words = column.split(/(?=[A-Z])/);
-      const lowerCaseWords = words.map((word) => word.toLowerCase());
-      const dbProp = lowerCaseWords.join('_');
-      row[dbProp] = newObj[column];
-    });
-    return row as T;
+    return userId;
   }
 }

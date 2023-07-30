@@ -17,6 +17,15 @@ import {
   ApiItemResponse,
   createSuccessApiItemReponse,
 } from '../dto/api-item-response';
+import {
+  ApiUpdateResponse,
+  createSuccessApiUpdateReponse,
+} from '../dto/api-update-response';
+import { ChatUser } from '../dto/chat-user';
+import {
+  ApiDeleteResponse,
+  createSuccessApiDeleteReponse,
+} from '../dto/api-delete-response';
 
 export class ChatManager {
   constructor(
@@ -54,6 +63,7 @@ export class ChatManager {
     var chatUsers = await this.databaseAccess.chatUsers(id);
     chat.chatUsers = chatUsers.map((x) => {
       return {
+        id: x.id,
         name: x.data.name,
         email: x.data.email,
       };
@@ -71,6 +81,87 @@ export class ChatManager {
     await this.databaseAccess.upsertChatUser(chatId, this.context.userId, 0);
 
     const response = createSuccessApiInsertReponse(chatId, this.context);
+    return response;
+  }
+
+  public async updateChat(): Promise<ApiUpdateResponse> {
+    const chat = this.context.body as ChatDetail;
+    const id = this.context.params.id;
+
+    const chatId = await this.databaseAccess.upsertChat(chat, id);
+
+    await this.databaseAccess.upsertChatUser(chatId, this.context.userId, 0);
+
+    if (chat.chatUsers) {
+      for (var user of chat.chatUsers) {
+        var userId = await this.databaseAccess.upsertChatUser(
+          chatId,
+          user.id,
+          0
+        );
+      }
+    }
+    const response = createSuccessApiUpdateReponse(chatId, this.context);
+    return response;
+  }
+
+  public async chatUsers(): Promise<ApiArrayResponse<ChatUser>> {
+    const id = this.context.params.id;
+    const users = await this.databaseAccess.chatUsers(id);
+    const chatUsers = users.map((x) => {
+      return {
+        id: x.id,
+        data: {
+          name: x.data.name,
+          email: x.data.email,
+          unreadMessageCount: x.data.unreadMessageCount,
+        },
+      };
+    }) as ListItem<ChatUser>[];
+
+    const response = createSuccessApiArrayResponse<ChatUser>(
+      chatUsers,
+      this.context
+    );
+    return response;
+  }
+
+  public async insertChatUser(): Promise<ApiInsertResponse> {
+    const chatId = this.context.params.id;
+    const chatUser = this.context.body as ChatUser;
+
+    this.logger.debug(`insertChatUsers: ${JSON.stringify(chatUser)} ${chatId}`);
+    const id = await this.databaseAccess.upsertChatUser(chatId, chatUser.id, 0);
+
+    const response = createSuccessApiInsertReponse(chatUser.id, this.context);
+    return response;
+  }
+
+  public async updateChatUser(): Promise<ApiInsertResponse> {
+    const chatId = this.context.params.id;
+    const userId: string = this.context.params.userId;
+
+    const chatUser = this.context.body as ChatUser;
+
+    this.logger.debug(`updateChatUser: ${JSON.stringify(chatUser)} ${chatId}`);
+    const id = await this.databaseAccess.upsertChatUser(
+      chatId,
+      userId,
+      chatUser.unreadMessageCount ?? 0
+    );
+
+    const response = createSuccessApiInsertReponse(userId, this.context);
+    return response;
+  }
+
+  public async deleteChatUser(): Promise<ApiDeleteResponse> {
+    const chatId = this.context.params.id;
+    const userId: string = this.context.params.userId;
+
+    this.logger.debug(`deleteChatUser: ${chatId} ${userId}`);
+    const id = await this.databaseAccess.deleteChatUser(chatId, userId);
+
+    const response = createSuccessApiDeleteReponse(userId, this.context);
     return response;
   }
 }

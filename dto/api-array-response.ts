@@ -4,7 +4,7 @@ import { ResponseBase } from './response-base';
 import { ResponseGeneric, createGenericResponse } from './response-generic';
 
 export interface ApiArrayResponse<T> extends ResponseBase {
-  data: ListItem<T>[];
+  items: ListItem<T>[];
   total: number;
 
   isPaged: boolean;
@@ -22,7 +22,7 @@ export function createSuccessApiArrayResponse<T>(
   context: Context
 ): ApiArrayResponse<T> {
   return {
-    data: data,
+    items: data,
     total: data.length,
     isPaged: false,
     page: 0,
@@ -44,7 +44,7 @@ export function createSuccessApiArrayResponsePaged<T>(
   context: Context
 ): ApiArrayResponse<T> {
   return {
-    data: data,
+    items: data,
     total: data.length,
     isPaged: true,
     page: page,
