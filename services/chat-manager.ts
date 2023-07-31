@@ -63,7 +63,7 @@ export class ChatManager {
     var chatUsers = await this.databaseAccess.chatUsers(id);
     chat.chatUsers = chatUsers.map((x) => {
       return {
-        id: x.id,
+        userId: x.id,
         name: x.data.name,
         email: x.data.email,
       };
@@ -96,7 +96,7 @@ export class ChatManager {
       for (var user of chat.chatUsers) {
         var userId = await this.databaseAccess.upsertChatUser(
           chatId,
-          user.id,
+          user.userId,
           0
         );
       }
@@ -126,14 +126,36 @@ export class ChatManager {
     return response;
   }
 
+  public async chatUser(): Promise<ApiItemResponse> {
+    const chatId = this.context.params.id;
+    const userId = this.context.params.userId;
+
+    const chatUsers = await this.databaseAccess.chatUsers(chatId);
+    const chatUser = chatUsers.find((x) => x.id == userId);
+
+    const response = createSuccessApiItemReponse(
+      chatUser?.data,
+      userId,
+      this.context
+    );
+    return response;
+  }
+
   public async insertChatUser(): Promise<ApiInsertResponse> {
     const chatId = this.context.params.id;
     const chatUser = this.context.body as ChatUser;
 
     this.logger.debug(`insertChatUsers: ${JSON.stringify(chatUser)} ${chatId}`);
-    const id = await this.databaseAccess.upsertChatUser(chatId, chatUser.id, 0);
+    const id = await this.databaseAccess.upsertChatUser(
+      chatId,
+      chatUser.userId,
+      0
+    );
 
-    const response = createSuccessApiInsertReponse(chatUser.id, this.context);
+    const response = createSuccessApiInsertReponse(
+      chatUser.userId,
+      this.context
+    );
     return response;
   }
 

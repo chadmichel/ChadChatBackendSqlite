@@ -9,7 +9,7 @@ import { ChatDetail } from '../dto/chat-detail';
 import { ListItem } from '../dto/list-item';
 import { User } from '../dto/user';
 import { SqliteUtil } from './sqlite-util';
-import { ChatUser } from '../dto/chat-user';
+import { ChatUser, ChatUserDb } from '../dto/chat-user';
 
 export class DatabaseAccess {
   async initSystem() {
@@ -33,7 +33,7 @@ export class DatabaseAccess {
     this.logger.debug('create tables: path = ' + this.config.dbBasePath);
 
     await this.sql.runScript(
-      'create table if not exists users (id text primary key, name text not null, email text not null, password text not null, role text not null, created_at text not null, updated_at text not null);'
+      'create table if not exists users (id text primary key, name text not null, email text not null, role text not null, avatar, created_at text not null, updated_at text not null);'
     );
     await this.sql.runScript(
       'create table if not exists chats (id text primary key, name text not null, created_at text not null, updated_at text not null, last_message text, last_message_at, last_message_by, last_message_by_id, last_message_by_avatar);'
@@ -96,7 +96,7 @@ export class DatabaseAccess {
 
   async chatUsers(chatId: string): Promise<ListItem<ChatUser>[]> {
     var sql =
-      'select u.id, u.email, cu.unread_message_count from users u inner join chat_users cu on u.id = cu.user_id where cu.chat_id = ?';
+      'select u.id, u.email, cu.unread_message_count, u.name from users u inner join chat_users cu on u.id = cu.user_id where cu.chat_id = ? order by u.updated_at desc';
     var params = [chatId];
     var promise = new Promise<ListItem<ChatUser>[]>((resolve, reject) => {
       this.logger.debug('chatUsers: sql: ' + sql);
@@ -137,9 +137,11 @@ export class DatabaseAccess {
     params.push(chatId);
     params.push(userId);
 
-    const user = await this.sql.selectSQL<ChatUser>(sql, params as []);
+    const user = await this.sql.selectSQL<ChatUserDb>(sql, params as []);
     if (!user || user.length == 0) {
       return this.sql.upsert('chat_users', chatUser);
+    } else {
+      return this.sql.upsert('chat_users', chatUser, user[0].id);
     }
     return '';
   }

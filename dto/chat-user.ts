@@ -1,6 +1,13 @@
 export interface ChatUser {
-  id: string;
+  userId: string;
   name: string;
   email: string;
+  unreadMessageCount?: number;
+}
+
+export interface ChatUserDb {
+  id: string;
+  userId: string;
+  chatId: string;
   unreadMessageCount?: number;
 }

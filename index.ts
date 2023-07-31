@@ -303,6 +303,9 @@ authenticatedPut('/chats/:id', async (services) => {
 authenticatedGet('/chats/:id/users', async (services) => {
   return await services.chatManager.chatUsers();
 });
+authenticatedGet('/chats/:id/users/:userId', async (services) => {
+  return await services.chatManager.chatUser();
+});
 authenticatedPost('/chats/:id/users', async (services) => {
   return await services.chatManager.insertChatUser();
 });
