@@ -10,6 +10,7 @@ export interface Context {
 
   body: any;
   params: any;
+  queryParams: any;
 }
 
 export interface Header {

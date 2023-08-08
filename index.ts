@@ -49,6 +49,7 @@ function buildContext(
     fullUrl: request.hostname + request.url,
     body: request.body,
     params: request.params,
+    queryParams: request.query,
   } as Context;
 
   if (user) {
@@ -64,6 +65,7 @@ function buildContext(
       fullUrl: request.hostname + request.url,
       body: request.body,
       params: request.params,
+      queryParams: request.query,
     } as Context;
   }
   return context;
@@ -146,18 +148,25 @@ const authenticatedGet = function (
     async (request, reply) => {
       const start = new Date();
       const services = buildServices(route, request, reply);
-      services.logger.debug('authenticatedGet: ' + route);
-      const response = await handler(services);
-      const end = new Date();
-      services.logger.debug(
-        'authenticatedGet: ' +
-          route +
-          ' response: ' +
-          response +
-          ' duration: ' +
-          (end.getTime() - start.getTime() + 'ms')
-      );
-      return response;
+
+      try {
+        services.logger.debug('authenticatedGet: ' + route);
+        const response = await handler(services);
+        const end = new Date();
+        services.logger.debug(
+          'authenticatedGet: ' +
+            route +
+            ' response: ' +
+            response +
+            ' duration: ' +
+            (end.getTime() - start.getTime() + 'ms')
+        );
+        return response;
+      } catch (ex: any) {
+        services.logger.error(ex!.toString());
+        return ex;
+      }
+      return {};
     }
   );
 };
@@ -262,6 +271,35 @@ const adminPost = function (
   );
 };
 
+const adminGet = function (
+  route: string,
+  handler: (services: Services) => Promise<any>
+) {
+  server.get(
+    currentApiVersion + route,
+    {
+      onRequest: [authenticateAdmin],
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const start = new Date();
+      const services = buildServices(route, request, reply);
+      services.logger.debug('adminGet: ' + route);
+
+      const response = await handler(services);
+      const end = new Date();
+      services.logger.debug(
+        'adminGet: ' +
+          route +
+          ' response: ' +
+          response +
+          ' duration: ' +
+          (end.getTime() - start.getTime() + 'ms')
+      );
+      return response;
+    }
+  );
+};
+
 server.setErrorHandler((error, request, reply) => {
   request.log.error(error);
   console.log(error);
@@ -270,7 +308,7 @@ server.setErrorHandler((error, request, reply) => {
 
 // PUBLIC ROUTES
 publicGet('/build', async (services) => {
-  return '2023-07-13';
+  return '2023-08-08';
 });
 
 // INIT USER
@@ -295,7 +333,7 @@ authenticatedGet('/chats/:id', async (services) => {
   return await services.chatManager.getChat();
 });
 authenticatedPost('/chats', async (services) => {
-  return await services.chatManager.insertChat();
+  return await services.chatManager.getChats();
 });
 authenticatedPut('/chats/:id', async (services) => {
   return await services.chatManager.updateChat();
@@ -319,16 +357,27 @@ authenticatedDelete('/chats/:id/users/:userId', async (services) => {
 authenticatedGet('/chats/:id/messages', async (services) => {
   return await services.chatManager.chatMessages();
 });
+authenticatedGet('/chats/:id/messages/:messageId', async (services) => {
+  return await services.chatManager.chatMessage();
+});
 authenticatedPost('/chats/:id/messages', async (services) => {
   return await services.chatManager.insertChatMessage();
 });
-authenticatedGet('/chats/:id/messages/:messageId', async (services) => {
-  return await services.chatManager.chatMessage();
+authenticatedPut('/chats/:id/messages/:messageId', async (services) => {
+  return await services.chatManager.updateChatMessage();
 });
 
 // ADMIN ROUTES
 adminPost('/admin/initsystem', async (services) => {
   return await services.adminManager.initSystem();
+});
+
+adminGet('/admin/messages', async (services) => {
+  return await services.adminManager.auditMessages();
+});
+
+adminGet('/admin/chats', async (services) => {
+  return await services.adminManager.auditChats();
 });
 
 server.listen({ port: 8080 }, (err, address) => {

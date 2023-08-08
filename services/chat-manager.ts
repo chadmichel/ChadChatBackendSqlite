@@ -48,7 +48,14 @@ export class ChatManager {
   }
 
   public async getChats(): Promise<ApiArrayResponse<ChatListItem>> {
-    var chats = await this.databaseAccess.chatsForUser(this.context.userId);
+    const $top = this.context.params.$top;
+    const $skip = this.context.params.$skip;
+
+    var chats = await this.databaseAccess.chatsForUser(
+      this.context.userId,
+      $top,
+      $skip
+    );
 
     const response = createSuccessApiArrayResponse<ChatListItem>(
       chats,
@@ -221,6 +228,20 @@ export class ChatManager {
     const id = await this.databaseAccess.upsertMessage(message);
 
     const response = createSuccessApiInsertReponse(id, this.context);
+    return response;
+  }
+
+  public async updateChatMessage(): Promise<ApiInsertResponse> {
+    const chatId = this.context.params.id;
+    const message = this.context.body as Message;
+    message.userId = this.context.userId;
+    message.chatId = chatId;
+    message.timestamp = new Date().getTime();
+    const messageId = this.context.params.messageId;
+
+    const id = await this.databaseAccess.upsertMessage(message, messageId);
+
+    const response = createSuccessApiUpdateReponse(id, this.context);
     return response;
   }
 }

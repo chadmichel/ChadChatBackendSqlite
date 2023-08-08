@@ -48,17 +48,23 @@ export class DatabaseAccess {
     return guid;
   }
 
-  async chatsForUser(userId: string): Promise<ListItem<ChatListItem>[]> {
+  async chatsForUser(
+    userId: string,
+    $top: number,
+    $skip: number
+  ): Promise<ListItem<ChatListItem>[]> {
     var sql =
       'select chats.*, cu.unread_message_count from chats inner join chat_users cu on chats.id = cu.chat_id where cu.user_id = ?';
     var params = [userId];
     var promise = new Promise<ListItem<ChatListItem>[]>((resolve, reject) => {
       this.logger.debug('chatsForUser: sql: ' + sql);
 
-      this.sql.getArray<ChatListItem>(sql, params).then((rows) => {
-        this.logger.debug('chatsForUser: rows: ' + JSON.stringify(rows));
-        resolve(rows);
-      });
+      this.sql
+        .getArrayPaged<ChatListItem>(sql, params, $top, $skip, false)
+        .then((rows) => {
+          this.logger.debug('chatsForUser: rows: ' + JSON.stringify(rows));
+          resolve(rows);
+        });
     });
     return promise;
   }
@@ -182,6 +188,26 @@ export class DatabaseAccess {
         });
       }
     );
+    return promise;
+  }
+
+  async records(
+    tableName: string,
+    $top: number,
+    $skip: number
+  ): Promise<any[]> {
+    var sql = 'select * from ' + tableName + ' order by updated_at desc';
+    var params = [] as any[];
+    var promise = new Promise<any[]>((resolve, reject) => {
+      this.logger.debug('records: sql: ' + sql);
+
+      this.sql
+        .getArrayPaged<any>(sql, params, $top ?? 1000, $skip ?? 0, true)
+        .then((rows) => {
+          this.logger.debug('records: rows: ' + JSON.stringify(rows));
+          resolve(rows);
+        });
+    });
     return promise;
   }
 }

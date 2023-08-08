@@ -2,11 +2,8 @@ import { ConfigUtil } from './Config-Util';
 import { Database } from 'sqlite3';
 import { Context } from './context';
 import { Logger } from './logger';
-import { ChatListItem } from '../dto/chat-list-item';
 import { v4 as uuidv4 } from 'uuid';
-import { ChatDetail } from '../dto/chat-detail';
 import { ListItem } from '../dto/list-item';
-import { User } from '../dto/user';
 
 export class SqliteUtil {
   constructor(
@@ -15,16 +12,60 @@ export class SqliteUtil {
     private context: Context
   ) {}
 
+  maxPageSize = 1000;
+
   dbPath() {
     return this.config.dbBasePath + '/' + this.context.tenantId + '.db';
   }
 
-  async getArray<T>(sql: string, params: string[]): Promise<ListItem<T>[]> {
+  async getArrayPaged<T>(
+    sql: string,
+    params: string[],
+    $top: number,
+    $skip: number,
+    addTimestamps: boolean
+  ): Promise<ListItem<T>[]> {
+    if (!$top) {
+      $top = this.maxPageSize;
+    }
+    if (!$skip) {
+      $skip = 0;
+    }
+
     var promise = new Promise<ListItem<T>[]>((resolve, reject) => {
-      this.logger.debug('get: sql: ' + sql);
+      if ($top > this.maxPageSize) {
+        $top = this.maxPageSize;
+      }
+
+      var offset = $skip;
+      var pageSize = $top;
+      sql = sql + ' limit ' + pageSize + ' offset ' + offset;
+
+      this.logger.debug('getArrayPaged: sql: ' + sql);
       const db = new Database(this.dbPath());
 
-      db.get(sql, params, (err, row) => {
+      db.all(sql, params, (err, row) => {
+        if (err) {
+          this.logger.error(err.toString());
+          reject(err);
+        } else {
+          this.logger.debug('get: row: ' + JSON.stringify(row));
+          const rowCasted = this.mapToTSArray<T>(row, addTimestamps);
+          resolve(rowCasted);
+        }
+      });
+    });
+    return promise;
+  }
+
+  async getArray<T>(sql: string, params: string[]): Promise<ListItem<T>[]> {
+    var promise = new Promise<ListItem<T>[]>((resolve, reject) => {
+      sql = sql + ' limit ' + this.maxPageSize;
+
+      this.logger.debug('getArray: sql: ' + sql);
+      const db = new Database(this.dbPath());
+
+      db.all(sql, params, (err, row) => {
         if (err) {
           this.logger.error(err.toString());
           reject(err);
@@ -164,39 +205,24 @@ export class SqliteUtil {
     return promise;
   }
 
-  async selectAll<T>(tableName: string): Promise<ListItem<T>[]> {
-    var sql = 'select * from ' + tableName;
-    var promise = new Promise<ListItem<T>[]>((resolve, reject) => {
-      this.logger.debug('selectAll: sql: ' + sql);
-      const db = new Database(this.dbPath());
-
-      db.all(sql, (err, rows) => {
-        if (err) {
-          this.logger.error(err.toString());
-          reject(err);
-        } else {
-          this.logger.debug('selectAll: rows: ' + JSON.stringify(rows));
-          const rowsCasted = this.mapToTSArray<T>(rows);
-          resolve(rowsCasted);
-        }
-      });
-    });
-    return promise;
-  }
-
-  mapToTSArray<T>(rows: any): ListItem<T>[] {
+  mapToTSArray<T>(rows: any, addTimestamps = false): ListItem<T>[] {
     var arr = [] as ListItem<T>[];
+
+    if (!Array.isArray(rows)) {
+      rows = [rows];
+    }
     rows.forEach((row: any) => {
       var listItem = {
         id: row.id,
-        data: this.mapToTS<T>(row),
+        data: this.mapToTS<T>(row, addTimestamps),
       } as ListItem<T>;
       arr.push(listItem);
     });
+
     return arr;
   }
 
-  mapToTS<T>(row: any): T {
+  mapToTS<T>(row: any, addTimestamps = false): T {
     let obj = {} as any;
     const columns = Object.keys(row);
     const formattedColumns = columns.map((column) => {
@@ -206,8 +232,14 @@ export class SqliteUtil {
       );
       const tsProp = capitalizedWords.join('');
       var lowerProp = tsProp.charAt(0).toLowerCase() + tsProp.slice(1);
-      if (tsProp != 'Id' && tsProp != 'CreatedAt' && tsProp != 'UpdatedAt') {
-        obj[lowerProp] = row[column];
+      if (addTimestamps) {
+        if (tsProp != 'Id') {
+          obj[lowerProp] = row[column];
+        }
+      } else {
+        if (tsProp != 'Id' && tsProp != 'CreatedAt' && tsProp != 'UpdatedAt') {
+          obj[lowerProp] = row[column];
+        }
       }
     });
     return obj as T;
