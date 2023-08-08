@@ -316,24 +316,20 @@ authenticatedDelete('/chats/:id/users/:userId', async (services) => {
   return await services.chatManager.deleteChatUser();
 });
 
+authenticatedGet('/chats/:id/messages', async (services) => {
+  return await services.chatManager.chatMessages();
+});
+authenticatedPost('/chats/:id/messages', async (services) => {
+  return await services.chatManager.insertChatMessage();
+});
+authenticatedGet('/chats/:id/messages/:messageId', async (services) => {
+  return await services.chatManager.chatMessage();
+});
+
 // ADMIN ROUTES
 adminPost('/admin/initsystem', async (services) => {
   return await services.adminManager.initSystem();
 });
-
-// server.post(
-//   currentApiVersion + '/init',
-//   async (request: FastifyRequest, reply: FastifyReply) => {
-//     return init(request, reply);
-//   }
-// );
-
-// server.get(
-//   currentApiVersion + '/conversations',
-//   async (request: FastifyRequest, reply: FastifyReply) => {
-//     return init(request, reply);
-//   }
-// );
 
 server.listen({ port: 8080 }, (err, address) => {
   if (err) {

@@ -26,6 +26,7 @@ import {
   ApiDeleteResponse,
   createSuccessApiDeleteReponse,
 } from '../dto/api-delete-response';
+import { Message } from '../dto/message';
 
 export class ChatManager {
   constructor(
@@ -184,6 +185,42 @@ export class ChatManager {
     const id = await this.databaseAccess.deleteChatUser(chatId, userId);
 
     const response = createSuccessApiDeleteReponse(userId, this.context);
+    return response;
+  }
+
+  public async chatMessages(): Promise<ApiArrayResponse<Message>> {
+    const chatId = this.context.params.id;
+    const messages = await this.databaseAccess.chatMessages(chatId);
+
+    const response = createSuccessApiArrayResponse<Message>(
+      messages,
+      this.context
+    );
+    return response;
+  }
+
+  public async chatMessage(): Promise<ApiItemResponse> {
+    const messageId = this.context.params.messageId;
+    const message = await this.databaseAccess.chatMessage(messageId);
+
+    const response = createSuccessApiItemReponse(
+      message,
+      messageId,
+      this.context
+    );
+    return response;
+  }
+
+  public async insertChatMessage(): Promise<ApiInsertResponse> {
+    const chatId = this.context.params.id;
+    const message = this.context.body as Message;
+    message.userId = this.context.userId;
+    message.chatId = chatId;
+    message.timestamp = new Date().getTime();
+
+    const id = await this.databaseAccess.upsertMessage(message);
+
+    const response = createSuccessApiInsertReponse(id, this.context);
     return response;
   }
 }

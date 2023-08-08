@@ -10,6 +10,7 @@ import { ListItem } from '../dto/list-item';
 import { User } from '../dto/user';
 import { SqliteUtil } from './sqlite-util';
 import { ChatUser, ChatUserDb } from '../dto/chat-user';
+import { Message, MessageListItem } from '../dto/message';
 
 export class DatabaseAccess {
   async initSystem() {
@@ -24,10 +25,6 @@ export class DatabaseAccess {
 
   dispose() {}
 
-  dbPath() {
-    return this.config.dbBasePath + '/' + this.context.tenantId + '.db';
-  }
-
   async createTables() {
     this.logger.debug('create tables: userid = ' + this.context.userId);
     this.logger.debug('create tables: path = ' + this.config.dbBasePath);
@@ -39,7 +36,7 @@ export class DatabaseAccess {
       'create table if not exists chats (id text primary key, name text not null, created_at text not null, updated_at text not null, last_message text, last_message_at, last_message_by, last_message_by_id, last_message_by_avatar);'
     );
     await this.sql.runScript(
-      'create table if not exists messages (id text primary key, chat_id text not null, user_id text not null, message text not null, created_at text not null, updated_at text not null);'
+      'create table if not exists messages (id text primary key, chat_id text not null, user_id text not null, message text not null, timestamp not null, created_at text not null, updated_at text not null);'
     );
     await this.sql.runScript(
       'create table if not exists chat_users (id text primary key, chat_id text not null, user_id text not null, created_at text not null, updated_at text not null, unread_message_count not null);'
@@ -57,17 +54,10 @@ export class DatabaseAccess {
     var params = [userId];
     var promise = new Promise<ListItem<ChatListItem>[]>((resolve, reject) => {
       this.logger.debug('chatsForUser: sql: ' + sql);
-      const db = new Database(this.dbPath());
 
-      db.all(sql, params, (err, rows) => {
-        if (err) {
-          this.logger.error(err.toString());
-          reject(err);
-        } else {
-          this.logger.debug('chatsForUser: rows: ' + JSON.stringify(rows));
-          const rowsCasted = this.sql.mapToTSArray<ChatListItem>(rows);
-          resolve(rowsCasted);
-        }
+      this.sql.getArray<ChatListItem>(sql, params).then((rows) => {
+        this.logger.debug('chatsForUser: rows: ' + JSON.stringify(rows));
+        resolve(rows);
       });
     });
     return promise;
@@ -78,17 +68,10 @@ export class DatabaseAccess {
     var params = [chatId];
     var promise = new Promise<ChatDetail>((resolve, reject) => {
       this.logger.debug('chatDetail: sql: ' + sql);
-      const db = new Database(this.dbPath());
 
-      db.get(sql, params, (err, row) => {
-        if (err) {
-          this.logger.error(err.toString());
-          reject(err);
-        } else {
-          this.logger.debug('chatDetail: row: ' + JSON.stringify(row));
-          const rowCasted = this.sql.mapToTS<ChatDetail>(row);
-          resolve(rowCasted);
-        }
+      this.sql.get<ChatDetail>(sql, params).then((rows) => {
+        this.logger.debug('chatDetail: row: ' + JSON.stringify(rows));
+        resolve(rows);
       });
     });
     return promise;
@@ -100,19 +83,13 @@ export class DatabaseAccess {
     var params = [chatId];
     var promise = new Promise<ListItem<ChatUser>[]>((resolve, reject) => {
       this.logger.debug('chatUsers: sql: ' + sql);
-      const db = new Database(this.dbPath());
 
-      db.all(sql, params, (err, rows) => {
-        if (err) {
-          this.logger.error(err.toString());
-          reject(err);
-        } else {
-          this.logger.debug('chatUsers: rows: ' + JSON.stringify(rows));
-          const rowsCasted = this.sql.mapToTSArray<ChatUser>(rows);
-          resolve(rowsCasted);
-        }
+      this.sql.getArray<ChatUser>(sql, params).then((rows) => {
+        this.logger.debug('chatUsers: rows: ' + JSON.stringify(rows));
+        resolve(rows);
       });
     });
+
     return promise;
   }
 
@@ -155,5 +132,56 @@ export class DatabaseAccess {
     await this.sql.runScript(sql, params as []);
 
     return userId;
+  }
+
+  async upsertMessage(message: Message, id?: string): Promise<string> {
+    var guid = await this.sql.upsert('messages', message, id);
+    return guid;
+  }
+
+  async updateChatUserUnreadMessageCount(messageId: string): Promise<string> {
+    const sql =
+      'update chat_users set unread_message_count = unread_message_count + 1 where chat_id = (select chat_id from messages where id = ?)';
+    const params = [messageId] as any[];
+    params.push(messageId);
+
+    await this.sql.runScript(sql, params as []);
+
+    return messageId;
+  }
+
+  async chatMessage(messageId: string): Promise<Message> {
+    var sql = 'select * from messages where id = ?';
+    var params = [messageId];
+    var promise = new Promise<Message>((resolve, reject) => {
+      this.logger.debug('chatMessage: sql: ' + sql);
+
+      this.sql.get<Message>(sql, params).then((row) => {
+        if (row) {
+          this.logger.debug('chatMessage: row: ' + JSON.stringify(row));
+          resolve(row);
+        } else {
+          reject('chatMessage: row not found');
+        }
+      });
+    });
+    return promise;
+  }
+
+  async chatMessages(chatId: string): Promise<ListItem<MessageListItem>[]> {
+    var sql =
+      'select m.*, u.email, u.name, u.avatar from messages m join users u on u.id = m.user_id where chat_id = ? order by timestamp desc';
+    var params = [chatId];
+    var promise = new Promise<ListItem<MessageListItem>[]>(
+      (resolve, reject) => {
+        this.logger.debug('chatMessages: sql: ' + sql);
+
+        this.sql.getArray<MessageListItem>(sql, params).then((rows) => {
+          this.logger.debug('chatMessages: rows: ' + JSON.stringify(rows));
+          resolve(rows);
+        });
+      }
+    );
+    return promise;
   }
 }

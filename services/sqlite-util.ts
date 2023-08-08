@@ -19,6 +19,44 @@ export class SqliteUtil {
     return this.config.dbBasePath + '/' + this.context.tenantId + '.db';
   }
 
+  async getArray<T>(sql: string, params: string[]): Promise<ListItem<T>[]> {
+    var promise = new Promise<ListItem<T>[]>((resolve, reject) => {
+      this.logger.debug('get: sql: ' + sql);
+      const db = new Database(this.dbPath());
+
+      db.get(sql, params, (err, row) => {
+        if (err) {
+          this.logger.error(err.toString());
+          reject(err);
+        } else {
+          this.logger.debug('get: row: ' + JSON.stringify(row));
+          const rowCasted = this.mapToTSArray<T>(row);
+          resolve(rowCasted);
+        }
+      });
+    });
+    return promise;
+  }
+
+  async get<T>(sql: string, params: string[]): Promise<T> {
+    var promise = new Promise<T>((resolve, reject) => {
+      this.logger.debug('get: sql: ' + sql);
+      const db = new Database(this.dbPath());
+
+      db.get(sql, params, (err, row) => {
+        if (err) {
+          this.logger.error(err.toString());
+          reject(err);
+        } else {
+          this.logger.debug('get: row: ' + JSON.stringify(row));
+          const rowCasted = this.mapToTS<T>(row);
+          resolve(rowCasted);
+        }
+      });
+    });
+    return promise;
+  }
+
   async runScript(script: string, params?: any[]) {
     var promise = new Promise((resolve, reject) => {
       this.logger.debug('runScript: script: ' + script);
