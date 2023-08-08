@@ -227,6 +227,8 @@ export class ChatManager {
 
     const id = await this.databaseAccess.upsertMessage(message);
 
+    await this.databaseAccess.updateChatUserUnreadMessageCount(chatId);
+
     const response = createSuccessApiInsertReponse(id, this.context);
     return response;
   }

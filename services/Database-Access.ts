@@ -145,15 +145,14 @@ export class DatabaseAccess {
     return guid;
   }
 
-  async updateChatUserUnreadMessageCount(messageId: string): Promise<string> {
+  async updateChatUserUnreadMessageCount(chatId: string): Promise<string> {
     const sql =
-      'update chat_users set unread_message_count = unread_message_count + 1 where chat_id = (select chat_id from messages where id = ?)';
-    const params = [messageId] as any[];
-    params.push(messageId);
+      'update chat_users set unread_message_count = unread_message_count + 1 where chat_id = ?';
+    const params = [chatId] as any[];
 
     await this.sql.runScript(sql, params as []);
 
-    return messageId;
+    return chatId;
   }
 
   async chatMessage(messageId: string): Promise<Message> {

@@ -380,6 +380,10 @@ adminGet('/admin/chats', async (services) => {
   return await services.adminManager.auditChats();
 });
 
+adminGet('/admin/users', async (services) => {
+  return await services.adminManager.auditUsers();
+});
+
 server.listen({ port: 8080 }, (err, address) => {
   if (err) {
     console.error(err);

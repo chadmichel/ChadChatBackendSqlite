@@ -47,4 +47,17 @@ export class AdminManager {
     );
     return response;
   }
+
+  public async auditUsers() {
+    const $top = this.context.params.$top;
+    const $skip = this.context.params.$skip;
+
+    var messages = await this.databaseAccess.records('users', $top, $skip);
+
+    const response = createSuccessApiArrayResponse<RawRecordListItem>(
+      messages,
+      this.context
+    );
+    return response;
+  }
 }
