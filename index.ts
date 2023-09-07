@@ -21,6 +21,9 @@ import { AdminManager } from './services/admin-manager';
 import { Logger } from './services/logger';
 import { ChatManager } from './services/chat-manager';
 import { SqliteUtil } from './services/sqlite-util';
+import { ApiResponse } from './dto/api-resposne';
+import { createGenericResponse } from './dto/response-generic';
+import { RawManager } from './services/raw-manager';
 
 const server = fastify();
 
@@ -92,6 +95,7 @@ function buildServices(
     sqlite
   );
 
+  const rawManager = new RawManager(logger, context, databaseAccess, sqlite);
   const adminManager = new AdminManager(logger, context, databaseAccess);
   const chatManager = new ChatManager(logger, context, databaseAccess);
 
@@ -103,6 +107,7 @@ function buildServices(
     databaseAccess: databaseAccess,
     adminManager: adminManager,
     chatManager: chatManager,
+    rawManager: rawManager,
   } as Services;
   return services;
 }
@@ -125,6 +130,10 @@ const authenticateAdmin = async function (request: any, reply: any) {
     reply.send(err);
   }
 };
+
+function mapResponse(response: ApiResponse, reply: FastifyReply) {
+  reply.code(response.status);
+}
 
 const publicGet = function (
   route: string,
@@ -161,10 +170,25 @@ const authenticatedGet = function (
             ' duration: ' +
             (end.getTime() - start.getTime() + 'ms')
         );
+
+        mapResponse(response, reply);
         return response;
       } catch (ex: any) {
         services.logger.error(ex!.toString());
-        return ex;
+        let status = 500;
+        if (ex.toLowerCase().includes('not found')) {
+          status = 404;
+        } else if (ex.toLowerCase().includes('not authorized')) {
+          status = 401;
+        }
+
+        reply.code(status);
+        return {
+          status: status,
+          error: ex.toString(),
+          message: 'failure',
+          request: createGenericResponse(services.context),
+        };
       }
       return {};
     }
@@ -183,18 +207,37 @@ const authenticatedPost = function (
     async (request, reply) => {
       const start = new Date();
       const services = buildServices(route, request, reply);
-      services.logger.debug('authenticatedPost: ' + route);
-      const response = await handler(services);
-      const end = new Date();
-      services.logger.debug(
-        'authenticatedPost: ' +
-          route +
-          ' response: ' +
-          response +
-          ' duration: ' +
-          (end.getTime() - start.getTime() + 'ms')
-      );
-      return response;
+      try {
+        services.logger.debug('authenticatedPost: ' + route);
+        const response = await handler(services);
+        const end = new Date();
+        services.logger.debug(
+          'authenticatedPost: ' +
+            route +
+            ' response: ' +
+            response +
+            ' duration: ' +
+            (end.getTime() - start.getTime() + 'ms')
+        );
+        mapResponse(response, reply);
+        return response;
+      } catch (ex: any) {
+        services.logger.error(ex!.toString());
+        let status = 500;
+        if (ex.toLowerCase().includes('not found')) {
+          status = 404;
+        } else if (ex.toLowerCase().includes('not authorized')) {
+          status = 401;
+        }
+
+        reply.code(status);
+        return {
+          status: status,
+          error: ex.toString(),
+          message: 'failure',
+          request: createGenericResponse(services.context),
+        };
+      }
     }
   );
 };
@@ -211,18 +254,37 @@ const authenticatedPut = function (
     async (request, reply) => {
       const start = new Date();
       const services = buildServices(route, request, reply);
-      services.logger.debug('authenticatedPut: ' + route);
-      const response = await handler(services);
-      const end = new Date();
-      services.logger.debug(
-        'authenticatedPut: ' +
-          route +
-          ' response: ' +
-          response +
-          ' duration: ' +
-          (end.getTime() - start.getTime() + 'ms')
-      );
-      return response;
+      try {
+        services.logger.debug('authenticatedPut: ' + route);
+        const response = await handler(services);
+        const end = new Date();
+        services.logger.debug(
+          'authenticatedPut: ' +
+            route +
+            ' response: ' +
+            response +
+            ' duration: ' +
+            (end.getTime() - start.getTime() + 'ms')
+        );
+        mapResponse(response, reply);
+        return response;
+      } catch (ex: any) {
+        services.logger.error(ex!.toString());
+        let status = 500;
+        if (ex.toLowerCase().includes('not found')) {
+          status = 404;
+        } else if (ex.toLowerCase().includes('not authorized')) {
+          status = 401;
+        }
+
+        reply.code(status);
+        return {
+          status: status,
+          error: ex.toString(),
+          message: 'failure',
+          request: createGenericResponse(services.context),
+        };
+      }
     }
   );
 };
@@ -239,18 +301,37 @@ const authenticatedDelete = function (
     async (request, reply) => {
       const start = new Date();
       const services = buildServices(route, request, reply);
-      services.logger.debug('authenticatedDelete: ' + route);
-      const response = await handler(services);
-      const end = new Date();
-      services.logger.debug(
-        'authenticatedDelete: ' +
-          route +
-          ' response: ' +
-          response +
-          ' duration: ' +
-          (end.getTime() - start.getTime() + 'ms')
-      );
-      return response;
+      try {
+        services.logger.debug('authenticatedDelete: ' + route);
+        const response = await handler(services);
+        const end = new Date();
+        services.logger.debug(
+          'authenticatedDelete: ' +
+            route +
+            ' response: ' +
+            response +
+            ' duration: ' +
+            (end.getTime() - start.getTime() + 'ms')
+        );
+        mapResponse(response, reply);
+        return response;
+      } catch (ex: any) {
+        services.logger.error(ex!.toString());
+        let status = 500;
+        if (ex.toLowerCase().includes('not found')) {
+          status = 404;
+        } else if (ex.toLowerCase().includes('not authorized')) {
+          status = 401;
+        }
+
+        reply.code(status);
+        return {
+          status: status,
+          error: ex.toString(),
+          message: 'failure',
+          request: createGenericResponse(services.context),
+        };
+      }
     }
   );
 };
@@ -265,8 +346,38 @@ const adminPost = function (
       onRequest: [authenticateAdmin],
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const start = new Date();
       const services = buildServices(route, request, reply);
-      return await handler(services);
+      try {
+        const response = await handler(services);
+        const end = new Date();
+        services.logger.debug(
+          'adminGet: ' +
+            route +
+            ' response: ' +
+            response +
+            ' duration:  ' +
+            (end.getTime() - start.getTime() + 'ms')
+        );
+        mapResponse(response, reply);
+        return response;
+      } catch (ex: any) {
+        services.logger.error(ex!.toString());
+        let status = 500;
+        if (ex.toLowerCase().includes('not found')) {
+          status = 404;
+        } else if (ex.toLowerCase().includes('not authorized')) {
+          status = 401;
+        }
+
+        reply.code(status);
+        return {
+          status: status,
+          error: ex.toString(),
+          message: 'failure',
+          request: createGenericResponse(services.context),
+        };
+      }
     }
   );
 };
@@ -283,28 +394,41 @@ const adminGet = function (
     async (request: FastifyRequest, reply: FastifyReply) => {
       const start = new Date();
       const services = buildServices(route, request, reply);
-      services.logger.debug('adminGet: ' + route);
+      try {
+        services.logger.debug('adminGet: ' + route);
 
-      const response = await handler(services);
-      const end = new Date();
-      services.logger.debug(
-        'adminGet: ' +
-          route +
-          ' response: ' +
-          response +
-          ' duration: ' +
-          (end.getTime() - start.getTime() + 'ms')
-      );
-      return response;
+        const response = await handler(services);
+        const end = new Date();
+        services.logger.debug(
+          'adminGet: ' +
+            route +
+            ' response: ' +
+            response +
+            ' duration:  ' +
+            (end.getTime() - start.getTime() + 'ms')
+        );
+        mapResponse(response, reply);
+        return response;
+      } catch (ex: any) {
+        services.logger.error(ex!.toString());
+        let status = 500;
+        if (ex.toLowerCase().includes('not found')) {
+          status = 404;
+        } else if (ex.toLowerCase().includes('not authorized')) {
+          status = 401;
+        }
+
+        reply.code(status);
+        return {
+          status: status,
+          error: ex.toString(),
+          message: 'failure',
+          request: createGenericResponse(services.context),
+        };
+      }
     }
   );
 };
-
-server.setErrorHandler((error, request, reply) => {
-  request.log.error(error);
-  console.log(error);
-  reply.send(error);
-});
 
 // PUBLIC ROUTES
 publicGet('/build', async (services) => {
@@ -382,6 +506,24 @@ adminGet('/admin/chats', async (services) => {
 
 adminGet('/admin/users', async (services) => {
   return await services.adminManager.auditUsers();
+});
+
+adminGet('/debug/tables', async (services) => {
+  return await services.rawManager.tables();
+});
+
+adminGet('/debug/tables/:table', async (services) => {
+  return await services.rawManager.table();
+});
+
+server.setErrorHandler((error, request, reply) => {
+  request.log.error(error);
+  console.log(error);
+  reply.status(404);
+});
+
+process.on('uncaughtException', function (err) {
+  console.log('Caught exception: ' + err);
 });
 
 server.listen({ port: 8080 }, (err, address) => {

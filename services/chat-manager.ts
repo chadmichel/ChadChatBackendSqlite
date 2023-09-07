@@ -15,6 +15,7 @@ import {
 import { User } from '../dto/user';
 import {
   ApiItemResponse,
+  createErrorNotFoundApiItemReponse,
   createSuccessApiItemReponse,
 } from '../dto/api-item-response';
 import {
@@ -138,11 +139,10 @@ export class ChatManager {
     const chatId = this.context.params.id;
     const userId = this.context.params.userId;
 
-    const chatUsers = await this.databaseAccess.chatUsers(chatId);
-    const chatUser = chatUsers.find((x) => x.id == userId);
+    const chatUser = await this.databaseAccess.chatUser(chatId, userId);
 
     const response = createSuccessApiItemReponse(
-      chatUser?.data,
+      chatUser,
       userId,
       this.context
     );
@@ -208,13 +208,19 @@ export class ChatManager {
 
   public async chatMessage(): Promise<ApiItemResponse> {
     const messageId = this.context.params.messageId;
-    const message = await this.databaseAccess.chatMessage(messageId);
 
-    const response = createSuccessApiItemReponse(
-      message,
+    let response = createErrorNotFoundApiItemReponse(
+      'Message not found',
       messageId,
       this.context
     );
+
+    const message = await this.databaseAccess.chatMessage(messageId);
+
+    if (message) {
+      response = createSuccessApiItemReponse(message, messageId, this.context);
+    }
+
     return response;
   }
 

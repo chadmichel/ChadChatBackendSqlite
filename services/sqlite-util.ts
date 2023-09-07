@@ -4,6 +4,7 @@ import { Context } from './context';
 import { Logger } from './logger';
 import { v4 as uuidv4 } from 'uuid';
 import { ListItem } from '../dto/list-item';
+import { Errors } from '../dto/errors';
 
 export class SqliteUtil {
   constructor(
@@ -47,7 +48,7 @@ export class SqliteUtil {
       db.all(sql, params, (err, row) => {
         if (err) {
           this.logger.error(err.toString());
-          reject(err);
+          reject(Errors.notFound);
         } else {
           this.logger.debug('get: row: ' + JSON.stringify(row));
           const rowCasted = this.mapToTSArray<T>(row, addTimestamps);
@@ -68,11 +69,15 @@ export class SqliteUtil {
       db.all(sql, params, (err, row) => {
         if (err) {
           this.logger.error(err.toString());
-          reject(err);
+          reject(Errors.notFound);
         } else {
           this.logger.debug('get: row: ' + JSON.stringify(row));
-          const rowCasted = this.mapToTSArray<T>(row);
-          resolve(rowCasted);
+          if (row && row.length > 0) {
+            const rowCasted = this.mapToTSArray<T>(row);
+            resolve(rowCasted);
+          } else {
+            reject(Errors.notFound);
+          }
         }
       });
     });
@@ -84,14 +89,18 @@ export class SqliteUtil {
       this.logger.debug('get: sql: ' + sql);
       const db = new Database(this.dbPath());
 
-      db.get(sql, params, (err, row) => {
+      db.get(sql, params, async (err, row) => {
         if (err) {
           this.logger.error(err.toString());
-          reject(err);
+          reject(Errors.notFound);
         } else {
           this.logger.debug('get: row: ' + JSON.stringify(row));
           const rowCasted = this.mapToTS<T>(row);
-          resolve(rowCasted);
+          if (rowCasted) {
+            resolve(rowCasted);
+          } else {
+            reject(Errors.notFound);
+          }
         }
       });
     });
@@ -205,6 +214,27 @@ export class SqliteUtil {
     return promise;
   }
 
+  async listAllTables(): Promise<string[]> {
+    var promise = new Promise<string[]>((resolve, reject) => {
+      const sql = 'select name from sqlite_master where type = ?';
+      const params = ['table'];
+
+      this.logger.debug('listAllTables: sql: ' + sql);
+      const db = new Database(this.dbPath());
+
+      db.all(sql, params, (err, rows) => {
+        if (err) {
+          this.logger.error(err.toString());
+          reject(err);
+        } else {
+          this.logger.debug('listAllTables: rows: ' + JSON.stringify(rows));
+          resolve(rows.map((x: any) => x.name));
+        }
+      });
+    });
+    return promise;
+  }
+
   mapToTSArray<T>(rows: any, addTimestamps = false): ListItem<T>[] {
     var arr = [] as ListItem<T>[];
 
@@ -222,27 +252,34 @@ export class SqliteUtil {
     return arr;
   }
 
-  mapToTS<T>(row: any, addTimestamps = false): T {
-    let obj = {} as any;
-    const columns = Object.keys(row);
-    const formattedColumns = columns.map((column) => {
-      const words = column.split('_');
-      const capitalizedWords = words.map(
-        (word) => word.charAt(0).toUpperCase() + word.slice(1)
-      );
-      const tsProp = capitalizedWords.join('');
-      var lowerProp = tsProp.charAt(0).toLowerCase() + tsProp.slice(1);
-      if (addTimestamps) {
-        if (tsProp != 'Id') {
-          obj[lowerProp] = row[column];
+  mapToTS<T>(row: any, addTimestamps = false): T | undefined {
+    if (row) {
+      let obj = {} as any;
+      const columns = Object.keys(row);
+      const formattedColumns = columns.map((column) => {
+        const words = column.split('_');
+        const capitalizedWords = words.map(
+          (word) => word.charAt(0).toUpperCase() + word.slice(1)
+        );
+        const tsProp = capitalizedWords.join('');
+        var lowerProp = tsProp.charAt(0).toLowerCase() + tsProp.slice(1);
+        if (addTimestamps) {
+          if (tsProp != 'Id') {
+            obj[lowerProp] = row[column];
+          }
+        } else {
+          if (
+            tsProp != 'Id' &&
+            tsProp != 'CreatedAt' &&
+            tsProp != 'UpdatedAt'
+          ) {
+            obj[lowerProp] = row[column];
+          }
         }
-      } else {
-        if (tsProp != 'Id' && tsProp != 'CreatedAt' && tsProp != 'UpdatedAt') {
-          obj[lowerProp] = row[column];
-        }
-      }
-    });
-    return obj as T;
+      });
+      return obj as T;
+    }
+    return undefined;
   }
 
   mapToDbArray<T>(arr: any): any {

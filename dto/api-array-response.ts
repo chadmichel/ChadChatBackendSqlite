@@ -7,10 +7,14 @@ export interface ApiArrayResponse<T> extends ResponseBase {
   items: ListItem<T>[];
   total: number;
 
-  isPaged: boolean;
-  page: number;
-  pageSize: number;
-  pageCount: number;
+  isPaged?: boolean;
+  page?: number;
+  pageSize?: number;
+  pageCount?: number;
+
+  isRange?: boolean;
+  top?: number;
+  limit?: number;
 
   link: string;
 
@@ -53,6 +57,40 @@ export function createSuccessApiArrayResponsePaged<T>(
     status: 200,
     error: null,
     message: 'success',
+    link: context.fullUrl,
+    request: createGenericResponse(context),
+  };
+}
+
+export function createSuccessApiArrayResponseRange<T>(
+  data: ListItem<T>[],
+  top: number,
+  limit: number,
+  context: Context
+): ApiArrayResponse<T> {
+  return {
+    items: data,
+    total: data.length,
+    isRange: true,
+    top: top,
+    limit: limit,
+    status: 200,
+    error: null,
+    message: 'success',
+    link: context.fullUrl,
+    request: createGenericResponse(context),
+  };
+}
+
+export function createErrorApiArrayResponse<T>(
+  context: Context
+): ApiArrayResponse<T> {
+  return {
+    items: [],
+    total: 0,
+    status: 500,
+    error: 'error',
+    message: 'error',
     link: context.fullUrl,
     request: createGenericResponse(context),
   };

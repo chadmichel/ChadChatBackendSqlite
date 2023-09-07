@@ -11,6 +11,7 @@ import { User } from '../dto/user';
 import { SqliteUtil } from './sqlite-util';
 import { ChatUser, ChatUserDb } from '../dto/chat-user';
 import { Message, MessageListItem } from '../dto/message';
+import { Errors } from '../dto/errors';
 
 export class DatabaseAccess {
   async initSystem() {
@@ -87,16 +88,22 @@ export class DatabaseAccess {
     var sql =
       'select u.id, u.email, cu.unread_message_count, u.name from users u inner join chat_users cu on u.id = cu.user_id where cu.chat_id = ? order by u.updated_at desc';
     var params = [chatId];
-    var promise = new Promise<ListItem<ChatUser>[]>((resolve, reject) => {
-      this.logger.debug('chatUsers: sql: ' + sql);
+    this.logger.debug('chatUsers: sql: ' + sql);
 
-      this.sql.getArray<ChatUser>(sql, params).then((rows) => {
-        this.logger.debug('chatUsers: rows: ' + JSON.stringify(rows));
-        resolve(rows);
-      });
-    });
+    const rows = await this.sql.getArray<ChatUser>(sql, params);
+    return rows;
+  }
 
-    return promise;
+  async chatUser(chatId: string, userId: string): Promise<ChatUser> {
+    var sql =
+      'select u.id, u.email, cu.unread_message_count, u.name from users u inner join chat_users cu on u.id = cu.user_id where cu.chat_id = ? and cu.user_id = ? order by u.updated_at desc';
+    var params = [];
+    params.push(chatId);
+    params.push(userId);
+    this.logger.debug('chatUsers: sql: ' + sql);
+
+    const row = await this.sql.get<ChatUser>(sql, params);
+    return row;
   }
 
   async upsertChat(chat: ChatDetail, id?: string): Promise<string> {
@@ -158,19 +165,14 @@ export class DatabaseAccess {
   async chatMessage(messageId: string): Promise<Message> {
     var sql = 'select * from messages where id = ?';
     var params = [messageId];
-    var promise = new Promise<Message>((resolve, reject) => {
-      this.logger.debug('chatMessage: sql: ' + sql);
+    this.logger.debug('chatMessage: sql: ' + sql);
 
-      this.sql.get<Message>(sql, params).then((row) => {
-        if (row) {
-          this.logger.debug('chatMessage: row: ' + JSON.stringify(row));
-          resolve(row);
-        } else {
-          reject('chatMessage: row not found');
-        }
-      });
-    });
-    return promise;
+    const row = await this.sql.get<Message>(sql, params);
+    if (row) {
+      this.logger.debug('chatMessage: row: ' + JSON.stringify(row));
+      return row;
+    }
+    throw new Error(Errors.notFound);
   }
 
   async chatMessages(chatId: string): Promise<ListItem<MessageListItem>[]> {

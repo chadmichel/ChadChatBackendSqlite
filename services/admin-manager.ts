@@ -49,8 +49,8 @@ export class AdminManager {
   }
 
   public async auditUsers() {
-    const $top = this.context.params.$top;
-    const $skip = this.context.params.$skip;
+    const $top = this.context.queryParams.$top ?? 100;
+    const $skip = this.context.queryParams.$skip ?? 0;
 
     var messages = await this.databaseAccess.records('users', $top, $skip);
 
