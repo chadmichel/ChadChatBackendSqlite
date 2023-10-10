@@ -89,6 +89,44 @@ export class ChatManager {
 
     await this.databaseAccess.upsertChatUser(chatId, this.context.userId, 0);
 
+    if (chat.chatUsers?.length > 0) {
+      this.logger.debug('adding other users to chat');
+
+      for (var user of chat.chatUsers) {
+        if (typeof user === 'string') {
+          // API allows for passing in of user as just an email address.
+          const userEmail = user as string;
+          this.logger.debug(`adding user ${userEmail} to chat`);
+          if (userEmail === this.context.userEmail) {
+            continue; // do not add existing user to chat
+          }
+          var userId = await this.databaseAccess.upsertChatUser(
+            chatId,
+            userEmail,
+            0
+          );
+        } else if (user.userId === this.context.userId) {
+          continue; // do not add existing user to chat
+        } else if (user.userId?.length > 0) {
+          // if we got a user id from the API use it
+          this.logger.debug(`adding user ${user.userId} to chat`);
+          var userId = await this.databaseAccess.upsertChatUser(
+            chatId,
+            user.userId,
+            0
+          );
+        } else if (user.email?.length > 0) {
+          // if we got an email address from the API use it
+          this.logger.debug(`adding user ${user.email} to chat`);
+          var userId = await this.databaseAccess.upsertChatUser(
+            chatId,
+            user.email,
+            0
+          );
+        }
+      }
+    }
+
     const response = createSuccessApiInsertReponse(chatId, this.context);
     return response;
   }

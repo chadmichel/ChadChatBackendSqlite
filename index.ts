@@ -24,10 +24,17 @@ import { SqliteUtil } from './services/sqlite-util';
 import { ApiResponse } from './dto/api-resposne';
 import { createGenericResponse } from './dto/response-generic';
 import { RawManager } from './services/raw-manager';
+import cors from '@fastify/cors';
+import { GenericUtil } from './services/generic-util';
 
 const server = fastify();
 
 const currentApiVersion = '/api/chat/v1';
+
+server.register(cors, {
+  origin: '*',
+  methods: ['GET', 'PUT', 'POST', 'DELETE'],
+});
 
 server.register(require('@fastify/jwt'), {
   secret: 'SECRET',
@@ -79,12 +86,12 @@ function buildServices(
   request: FastifyRequest,
   reply: FastifyReply
 ) {
+  const generic = new GenericUtil();
   const logger = new Logger(request);
 
   const context = buildContext(requestHandler, request, reply);
 
   const configUtil = new ConfigUtil();
-  const auth = new Auth(logger, context, request, reply);
 
   const sqlite = new SqliteUtil(logger, configUtil, context);
 
@@ -92,14 +99,18 @@ function buildServices(
     logger,
     configUtil,
     context,
-    sqlite
+    sqlite,
+    generic
   );
+
+  const auth = new Auth(logger, context, request, reply, databaseAccess);
 
   const rawManager = new RawManager(logger, context, databaseAccess, sqlite);
   const adminManager = new AdminManager(logger, context, databaseAccess);
   const chatManager = new ChatManager(logger, context, databaseAccess);
 
   const services = {
+    generic: generic,
     logger: logger,
     config: configUtil,
     context: context,
@@ -457,7 +468,7 @@ authenticatedGet('/chats/:id', async (services) => {
   return await services.chatManager.getChat();
 });
 authenticatedPost('/chats', async (services) => {
-  return await services.chatManager.getChats();
+  return await services.chatManager.insertChat();
 });
 authenticatedPut('/chats/:id', async (services) => {
   return await services.chatManager.updateChat();

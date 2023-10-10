@@ -71,12 +71,13 @@ export class SqliteUtil {
           this.logger.error(err.toString());
           reject(Errors.notFound);
         } else {
-          this.logger.debug('get: row: ' + JSON.stringify(row));
           if (row && row.length > 0) {
+            this.logger.debug('getArray: row: ' + JSON.stringify(row));
             const rowCasted = this.mapToTSArray<T>(row);
             resolve(rowCasted);
           } else {
-            reject(Errors.notFound);
+            this.logger.debug('getArray: no rows found');
+            resolve([]);
           }
         }
       });

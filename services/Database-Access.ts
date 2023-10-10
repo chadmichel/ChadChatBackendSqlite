@@ -12,6 +12,7 @@ import { SqliteUtil } from './sqlite-util';
 import { ChatUser, ChatUserDb } from '../dto/chat-user';
 import { Message, MessageListItem } from '../dto/message';
 import { Errors } from '../dto/errors';
+import { GenericUtil } from './generic-util';
 
 export class DatabaseAccess {
   async initSystem() {
@@ -21,7 +22,8 @@ export class DatabaseAccess {
     private logger: Logger,
     private config: ConfigUtil,
     private context: Context,
-    private sql: SqliteUtil
+    private sql: SqliteUtil,
+    private generic: GenericUtil
   ) {}
 
   dispose() {}
@@ -44,7 +46,70 @@ export class DatabaseAccess {
     );
   }
 
+  async user(userId: string): Promise<User> {
+    var sql = 'select * from users where id = ?';
+    var params = [userId];
+    this.logger.debug('user: sql: ' + sql);
+
+    const row = await this.sql.get<User>(sql, params);
+    if (row) {
+      this.logger.debug('user: row: ' + JSON.stringify(row));
+      return row;
+    }
+    throw new Error(Errors.notFound);
+  }
+
+  async doesUserExist(email: string): Promise<boolean> {
+    var sql = 'select * from users where email = ?';
+    var params = [email];
+    this.logger.debug('user: sql: ' + sql);
+
+    try {
+      const row = await this.sql.getArray<User>(sql, params);
+      if (row.length > 0) {
+        this.logger.debug('user: row: ' + JSON.stringify(row));
+        return true;
+      }
+    } catch {}
+
+    return false;
+  }
+
+  async userByEmail(email: string): Promise<User> {
+    var sql = 'select * from users where email = ?';
+    var params = [email];
+    this.logger.debug('user: sql: ' + sql);
+
+    const row = await this.sql.get<User>(sql, params);
+    if (row) {
+      this.logger.debug('user: row: ' + JSON.stringify(row));
+      return row;
+    }
+    throw new Error(Errors.notFound);
+  }
+
+  async getUserIdByEmail(email: string): Promise<string> {
+    var sql = 'select * from users where email = ?';
+    var params = [email];
+    this.logger.debug('user: sql: ' + sql);
+
+    const rows = await this.sql.getArray<User>(sql, params);
+    if (rows && rows.length > 0) {
+      this.logger.debug('user: row: ' + JSON.stringify(rows));
+      return rows[0].id;
+    }
+    throw new Error(Errors.notFound);
+  }
+
   async upsertUser(user: User, id?: string): Promise<string> {
+    if (!id && user.email) {
+      const exists = await this.doesUserExist(user.email);
+      if (exists) {
+        const userId = await this.getUserIdByEmail(user.email);
+        id = userId;
+      }
+    }
+
     var guid = await this.sql.upsert('users', user, id);
     return guid;
   }
@@ -113,15 +178,24 @@ export class DatabaseAccess {
 
   async upsertChatUser(
     chatId: string,
-    userId: string,
+    userIdorEmail: string,
     unreadMessageCount: number
   ): Promise<string> {
+    let userId = '';
+    if (this.generic.isEmail(userIdorEmail)) {
+      userId = await this.upsertUser({
+        email: userIdorEmail,
+        name: userIdorEmail,
+        role: 'user',
+      });
+    } else {
+      userId = userIdorEmail;
+    }
     const chatUser = {
       chatId: chatId,
       userId: userId,
       unreadMessageCount: unreadMessageCount,
     };
-
     const sql = 'select * from chat_users where chat_id = ? and user_id = ?';
     const params = [] as any[];
     params.push(chatId);
@@ -179,17 +253,20 @@ export class DatabaseAccess {
     var sql =
       'select m.*, u.email, u.name, u.avatar from messages m join users u on u.id = m.user_id where chat_id = ? order by timestamp desc';
     var params = [chatId];
-    var promise = new Promise<ListItem<MessageListItem>[]>(
-      (resolve, reject) => {
-        this.logger.debug('chatMessages: sql: ' + sql);
 
-        this.sql.getArray<MessageListItem>(sql, params).then((rows) => {
-          this.logger.debug('chatMessages: rows: ' + JSON.stringify(rows));
-          resolve(rows);
-        });
-      }
-    );
-    return promise;
+    return this.sql.getArray<MessageListItem>(sql, params);
+
+    // var promise = new Promise<ListItem<MessageListItem>[]>(
+    //   (resolve, reject) => {
+    //     this.logger.debug('chatMessages: sql: ' + sql);
+
+    //     this.sql.getArray<MessageListItem>(sql, params).then((rows) => {
+    //       this.logger.debug('chatMessages: rows: ' + JSON.stringify(rows));
+    //       resolve(rows);
+    //     });
+    //   }
+    // );
+    // return promise;
   }
 
   async records(
