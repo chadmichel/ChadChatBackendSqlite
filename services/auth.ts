@@ -30,6 +30,7 @@ export class Auth {
         email: email,
         name: email,
         role: 'admin',
+        avatar: '',
       });
     }
 

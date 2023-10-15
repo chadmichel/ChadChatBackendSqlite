@@ -187,6 +187,7 @@ export class DatabaseAccess {
         email: userIdorEmail,
         name: userIdorEmail,
         role: 'user',
+        avatar: '',
       });
     } else {
       userId = userIdorEmail;
@@ -223,7 +224,28 @@ export class DatabaseAccess {
 
   async upsertMessage(message: Message, id?: string): Promise<string> {
     var guid = await this.sql.upsert('messages', message, id);
+
+    // update other information
+    await this.updateChatUserUnreadMessageCount(message.chatId);
+    await this.updateChatLastMessage(message.chatId, message);
+
     return guid;
+  }
+
+  async updateChatLastMessage(chatId: string, message: Message) {
+    const user = await this.user(message.userId);
+
+    const sql =
+      'update chats set last_message = ?, last_message_at = ?, last_message_by = ?, last_message_by_id = ?, last_message_by_avatar = ? where id = ?';
+    const params = [] as any[];
+    params.push(message.message);
+    params.push(message.timestamp);
+    params.push(user.email);
+    params.push(message.userId);
+    params.push(user.avatar);
+    params.push(chatId);
+
+    await this.sql.runScript(sql, params as []);
   }
 
   async updateChatUserUnreadMessageCount(chatId: string): Promise<string> {
